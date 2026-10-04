@@ -95,6 +95,27 @@ steps:
       ${{ steps.impact.outputs.report-json }}
 ```
 
+## Example
+
+A Go pull request where `PaymentHandler` calls `ProcessPayment`, which calls
+`SavePayment`, and only `SavePayment` changed:
+
+```text
+Risk:       MODERATE (27/100)
+Confidence: HIGH (100/100)
+
+Changed function:   SavePayment
+Affected endpoint:  POST /payments
+Affected test:      TestProcessPayment
+
+Impact path:
+  PaymentHandler → ProcessPayment → SavePayment [changed]
+```
+
+A one-function change is traced up to the HTTP endpoint and the test it
+affects: the action reports the blast radius in functions, endpoints and
+tests.
+
 ## Inputs
 
 | Input | Default | Description |
