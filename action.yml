@@ -15,7 +15,7 @@ inputs:
       `go install github.com/Easlkad/impact/cmd/impact@<version>`.
       Any version `go install` accepts: a tag such as v0.1.0, or a commit.
     required: false
-    default: v0.1.0
+    default: v0.1.1
   fail-risk:
     description: Fail when the risk score is at least this value (0-100). Empty to never fail on risk.
     required: false
