@@ -1,7 +1,6 @@
 name: Impact — PR Change Analysis
 description: >-
-  Finds the functions, HTTP endpoints, workers and tests a pull request
-  affects, with explainable risk and confidence scores. Go repositories.
+  Find PR impact across functions, endpoints, workers and tests with explainable risk and confidence scores
 author: Easlkad
 
 branding:
