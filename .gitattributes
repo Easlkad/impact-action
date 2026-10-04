@@ -1,0 +1,5 @@
+# The scripts run with bash on the runners: keep LF line endings, even when
+# the repository is checked out on Windows.
+*.sh  text eol=lf
+*.js  text eol=lf
+*.yml text eol=lf

@@ -1,0 +1,116 @@
+name: Impact — PR Change Analysis
+description: >-
+  Finds the functions, HTTP endpoints, workers and tests a pull request
+  affects, with explainable risk and confidence scores. Go repositories.
+author: Easlkad
+
+branding:
+  icon: git-pull-request
+  color: purple
+
+inputs:
+  impact-version:
+    description: >-
+      Version of the impact CLI to install with
+      `go install github.com/Easlkad/impact/cmd/impact@<version>`.
+      Any version `go install` accepts: a tag such as v0.1.0, or a commit.
+    required: false
+    default: v0.1.0
+  fail-risk:
+    description: Fail when the risk score is at least this value (0-100). Empty to never fail on risk.
+    required: false
+    default: ""
+  fail-confidence-below:
+    description: Fail when the confidence score is below this value (0-100). Empty to never fail on confidence.
+    required: false
+    default: ""
+  max-items:
+    description: Maximum items per list in the Markdown report (0 for no limit). The JSON report is always complete.
+    required: false
+    default: "20"
+  comment:
+    description: Post the report as a pull request comment, updated on later runs (true or false). Needs github-token.
+    required: false
+    default: "true"
+  github-token:
+    description: >-
+      Token used only to post the pull request comment, typically
+      secrets.GITHUB_TOKEN with `pull-requests: write`. Without it, no
+      comment is posted; the analysis and the job summary still work.
+    required: false
+    default: ""
+  checkout:
+    description: >-
+      Check out the repository with full history first (true or false). Set
+      to false if an earlier step already did, with fetch-depth: 0.
+    required: false
+    default: "true"
+
+outputs:
+  report-markdown:
+    description: Path of the Markdown report.
+    value: ${{ steps.analyze.outputs.report-markdown }}
+  report-json:
+    description: Path of the JSON report (complete, schema documented in the impact README).
+    value: ${{ steps.analyze.outputs.report-json }}
+  exit-code:
+    description: >-
+      Exit code of the analysis: 0 no threshold violated, 3 risk threshold,
+      4 confidence threshold, 5 both. Errors (1, 2) fail the action before
+      this output is set.
+    value: ${{ steps.analyze.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    # impact reads both commits and their merge base from git history.
+    - name: Check out the repository with full history
+      if: inputs.checkout == 'true'
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install impact
+      id: install
+      shell: bash
+      env:
+        IMPACT_VERSION: ${{ inputs.impact-version }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/install.sh"
+
+    # Publishes the report to the job summary. A violated threshold does not
+    # fail this step: its verdict is kept in the exit-code output and applied
+    # by the last step, after the comment.
+    - name: Analyze the pull request
+      id: analyze
+      shell: bash
+      env:
+        IMPACT_BIN: ${{ steps.install.outputs.impact-bin }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        FAIL_RISK: ${{ inputs.fail-risk }}
+        FAIL_CONFIDENCE_BELOW: ${{ inputs.fail-confidence-below }}
+        MAX_ITEMS: ${{ inputs.max-items }}
+        COMMENT: ${{ inputs.comment }}
+        HAS_TOKEN: ${{ inputs.github-token != '' }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/run.sh"
+
+    # Never fails the action: problems, such as the read-only token of pull
+    # requests from forks, are reported as warnings.
+    - name: Comment on the pull request
+      if: steps.analyze.outputs.comment == 'true'
+      uses: actions/github-script@v7
+      env:
+        IMPACT_REPORT: ${{ steps.analyze.outputs.report-markdown }}
+        IMPACT_ACTION_PATH: ${{ github.action_path }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const path = require('path');
+          const postReport = require(path.join(process.env.IMPACT_ACTION_PATH, 'scripts', 'comment.js'));
+          await postReport({ github, context, core }, process.env.IMPACT_REPORT);
+
+    - name: Apply the thresholds
+      shell: bash
+      env:
+        IMPACT_EXIT_CODE: ${{ steps.analyze.outputs.exit-code }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/check.sh"
